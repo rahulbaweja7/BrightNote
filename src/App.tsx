@@ -145,7 +145,7 @@ function App() {
             </div>
             <div className="streak-counter">
               <Heart className="streak-icon" />
-              <span>{getStreakCount()} day streak</span>
+              <span>{getStreakCount()} day{getStreakCount() !== 1 ? 's' : ''} of gratitude</span>
             </div>
           </div>
         </header>
@@ -197,12 +197,12 @@ function App() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="empty-entry">
-                  <p>No entry for this day yet.</p>
-                  <p>Click "Add Entry" to log one good thing that happened today!</p>
-                </div>
-              )}
+                             ) : (
+                 <div className="empty-entry">
+                   <p>✨ No entry for this day yet</p>
+                   <p>Take a moment to reflect on something positive that happened today</p>
+                 </div>
+               )}
             </div>
           </div>
         </main>
@@ -221,14 +221,14 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                <textarea
-                  value={entryText}
-                  onChange={(e) => setEntryText(e.target.value)}
-                  placeholder="What's one good thing that happened today?"
-                  className="entry-textarea"
-                  rows={4}
-                  autoFocus
-                />
+                                 <textarea
+                   value={entryText}
+                   onChange={(e) => setEntryText(e.target.value)}
+                   placeholder="What's one good thing that happened today? 🌟"
+                   className="entry-textarea"
+                   rows={4}
+                   autoFocus
+                 />
               </div>
               <div className="modal-footer">
                 <button 
