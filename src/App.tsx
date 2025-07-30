@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
-import { Plus, Heart, Calendar, Sun } from 'lucide-react';
+import { Plus, Heart, Calendar, Sun, Settings, BarChart3, Download, Upload, Moon, Bell } from 'lucide-react';
 import './App.css';
 
 interface JournalEntry {
@@ -16,6 +16,8 @@ function App() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [entryText, setEntryText] = useState('');
+  const [darkMode, setDarkMode] = useState(false);
+  const [showNavMenu, setShowNavMenu] = useState(false);
 
   // Load entries from localStorage on component mount
   useEffect(() => {
@@ -23,12 +25,28 @@ function App() {
     if (savedEntries) {
       setEntries(JSON.parse(savedEntries));
     }
+    
+    // Load dark mode preference
+    const savedDarkMode = localStorage.getItem('darkMode');
+    if (savedDarkMode) {
+      setDarkMode(JSON.parse(savedDarkMode));
+    }
   }, []);
 
   // Save entries to localStorage whenever entries change
   useEffect(() => {
     localStorage.setItem('oneGoodThingEntries', JSON.stringify(entries));
   }, [entries]);
+
+  // Save dark mode preference
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }, [darkMode]);
 
   const getEntryForDate = (date: Date) => {
     return entries.find(entry => isSameDay(new Date(entry.date), date));
@@ -47,8 +65,6 @@ function App() {
       setShowEntryModal(false);
     }
   };
-
-
 
   const deleteEntry = (entryId: string) => {
     setEntries(prev => prev.filter(entry => entry.id !== entryId));
@@ -75,6 +91,46 @@ function App() {
       }
     }
     return streak;
+  };
+
+  const getTotalEntries = () => {
+    return entries.length;
+  };
+
+  const getCurrentMonthEntries = () => {
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    return entries.filter(entry => {
+      const entryDate = new Date(entry.date);
+      return entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
+    }).length;
+  };
+
+  const exportData = () => {
+    const dataStr = JSON.stringify(entries, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `gratitude-journal-${format(new Date(), 'yyyy-MM-dd')}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedEntries = JSON.parse(e.target?.result as string);
+          setEntries(importedEntries);
+        } catch (error) {
+          alert('Invalid file format. Please select a valid JSON file.');
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   const renderCalendar = () => {
@@ -136,20 +192,99 @@ function App() {
 
   return (
     <div className="App">
-      <div className="container">
-        <header className="app-header">
-          <div className="header-content">
+      {/* Enhanced Navbar */}
+      <nav className="navbar">
+        <div className="navbar-container">
+          <div className="navbar-left">
             <div className="logo">
               <Sun className="logo-icon" />
               <h1>One Good Thing</h1>
             </div>
-            <div className="streak-counter">
-              <Heart className="streak-icon" />
-              <span>{getStreakCount()} day{getStreakCount() !== 1 ? 's' : ''} of gratitude</span>
+          </div>
+
+          <div className="navbar-center">
+            <div className="stats-container">
+              <div className="stat-item">
+                <Heart className="stat-icon" />
+                <div className="stat-content">
+                  <span className="stat-value">{getStreakCount()}</span>
+                  <span className="stat-label">Day Streak</span>
+                </div>
+              </div>
+              <div className="stat-item">
+                <Calendar className="stat-icon" />
+                <div className="stat-content">
+                  <span className="stat-value">{getTotalEntries()}</span>
+                  <span className="stat-label">Total Entries</span>
+                </div>
+              </div>
+              <div className="stat-item">
+                <BarChart3 className="stat-icon" />
+                <div className="stat-content">
+                  <span className="stat-value">{getCurrentMonthEntries()}</span>
+                  <span className="stat-label">This Month</span>
+                </div>
+              </div>
             </div>
           </div>
-        </header>
 
+          <div className="navbar-right">
+            <div className="navbar-actions">
+              <button 
+                className="nav-btn"
+                onClick={() => setDarkMode(!darkMode)}
+                title="Toggle Dark Mode"
+              >
+                {darkMode ? <Sun className="nav-icon" /> : <Moon className="nav-icon" />}
+              </button>
+              
+              <button 
+                className="nav-btn"
+                onClick={() => setShowEntryModal(true)}
+                title="Add New Entry"
+              >
+                <Plus className="nav-icon" />
+              </button>
+
+              <div className="dropdown">
+                <button 
+                  className="nav-btn dropdown-toggle"
+                  onClick={() => setShowNavMenu(!showNavMenu)}
+                  title="More Options"
+                >
+                  <Settings className="nav-icon" />
+                </button>
+                
+                {showNavMenu && (
+                  <div className="dropdown-menu">
+                    <button className="dropdown-item" onClick={exportData}>
+                      <Download className="dropdown-icon" />
+                      Export Data
+                    </button>
+                    <label className="dropdown-item">
+                      <Upload className="dropdown-icon" />
+                      Import Data
+                      <input 
+                        type="file" 
+                        accept=".json" 
+                        onChange={importData}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                    <div className="dropdown-divider"></div>
+                    <button className="dropdown-item">
+                      <Bell className="dropdown-icon" />
+                      Set Reminders
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="container">
         <main className="main-content">
           <div className="content-grid">
             <div className="calendar-section">
@@ -197,12 +332,12 @@ function App() {
                     </button>
                   </div>
                 </div>
-                             ) : (
-                 <div className="empty-entry">
-                   <p>✨ No entry for this day yet</p>
-                   <p>Take a moment to reflect on something positive that happened today</p>
-                 </div>
-               )}
+              ) : (
+                <div className="empty-entry">
+                  <p>✨ No entry for this day yet</p>
+                  <p>Take a moment to reflect on something positive that happened today</p>
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -221,14 +356,14 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                                 <textarea
-                   value={entryText}
-                   onChange={(e) => setEntryText(e.target.value)}
-                   placeholder="What's one good thing that happened today? 🌟"
-                   className="entry-textarea"
-                   rows={4}
-                   autoFocus
-                 />
+                <textarea
+                  value={entryText}
+                  onChange={(e) => setEntryText(e.target.value)}
+                  placeholder="What's one good thing that happened today? 🌟"
+                  className="entry-textarea"
+                  rows={4}
+                  autoFocus
+                />
               </div>
               <div className="modal-footer">
                 <button 
