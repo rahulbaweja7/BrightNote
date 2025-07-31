@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
-import { Plus, Heart, Calendar, Sun, Settings, BarChart3, Download, Upload, Moon, Bell } from 'lucide-react';
+import { Plus, Heart, Calendar, Sun, Settings, BarChart3, Download, Upload, Moon, Bell, CheckCircle, AlertCircle, X, Search, Filter, Tag, Image, Share2, Info } from 'lucide-react';
 import './App.css';
 
 interface JournalEntry {
@@ -8,6 +8,16 @@ interface JournalEntry {
   date: string;
   content: string;
   timestamp: number;
+  mood?: number; // 1-5 scale
+  tags?: string[];
+  hasImage?: boolean;
+}
+
+interface Toast {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
+  duration?: number;
 }
 
 function App() {
@@ -18,6 +28,12 @@ function App() {
   const [entryText, setEntryText] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [showNavMenu, setShowNavMenu] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
 
   // Load entries from localStorage on component mount
   useEffect(() => {
@@ -48,26 +64,125 @@ function App() {
     }
   }, [darkMode]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowEntryModal(true);
+      }
+      if (e.key === 'Escape') {
+        setShowEntryModal(false);
+        setShowNavMenu(false);
+        setShowSearch(false);
+      }
+      if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
+    const id = Date.now().toString();
+    const newToast = { ...toast, id, duration: toast.duration || 3000 };
+    setToasts(prev => [...prev, newToast]);
+    
+    setTimeout(() => {
+      removeToast(id);
+    }, newToast.duration);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
+
   const getEntryForDate = (date: Date) => {
     return entries.find(entry => isSameDay(new Date(entry.date), date));
   };
 
-  const addEntry = () => {
-    if (entryText.trim()) {
-      const newEntry: JournalEntry = {
-        id: Date.now().toString(),
-        date: selectedDate.toISOString().split('T')[0],
-        content: entryText.trim(),
-        timestamp: Date.now(),
-      };
-      setEntries(prev => [...prev, newEntry]);
-      setEntryText('');
-      setShowEntryModal(false);
-    }
+  const addEntry = async () => {
+    if (!entryText.trim()) return;
+
+    setIsLoading(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const newEntry: JournalEntry = {
+      id: Date.now().toString(),
+      date: selectedDate.toISOString().split('T')[0],
+      content: entryText.trim(),
+      timestamp: Date.now(),
+      mood: 4, // Default mood
+      tags: extractTags(entryText),
+    };
+
+    setEntries(prev => [...prev, newEntry]);
+    setEntryText('');
+    setShowEntryModal(false);
+    setEditingEntry(null);
+    setIsLoading(false);
+    
+    addToast({
+      type: 'success',
+      message: 'Entry saved successfully! ✨',
+    });
   };
 
-  const deleteEntry = (entryId: string) => {
+  const updateEntry = async () => {
+    if (!editingEntry || !entryText.trim()) return;
+
+    setIsLoading(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const updatedEntry: JournalEntry = {
+      ...editingEntry,
+      content: entryText.trim(),
+      tags: extractTags(entryText),
+    };
+
+    setEntries(prev => prev.map(entry => 
+      entry.id === editingEntry.id ? updatedEntry : entry
+    ));
+    
+    setEntryText('');
+    setShowEntryModal(false);
+    setEditingEntry(null);
+    setIsLoading(false);
+    
+    addToast({
+      type: 'success',
+      message: 'Entry updated successfully! ✨',
+    });
+  };
+
+  const extractTags = (text: string): string[] => {
+    const tagRegex = /#(\w+)/g;
+    const matches = text.match(tagRegex);
+    return matches ? matches.map(tag => tag.slice(1)) : [];
+  };
+
+  const deleteEntry = async (entryId: string) => {
+    if (!window.confirm('Are you sure you want to delete this entry?')) return;
+
+    setIsLoading(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     setEntries(prev => prev.filter(entry => entry.id !== entryId));
+    setIsLoading(false);
+    
+    addToast({
+      type: 'info',
+      message: 'Entry deleted successfully',
+    });
   };
 
   const getCalendarDays = () => {
@@ -107,14 +222,26 @@ function App() {
   };
 
   const exportData = () => {
-    const dataStr = JSON.stringify(entries, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `gratitude-journal-${format(new Date(), 'yyyy-MM-dd')}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const dataStr = JSON.stringify(entries, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gratitude-journal-${format(new Date(), 'yyyy-MM-dd')}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      addToast({
+        type: 'success',
+        message: 'Data exported successfully! 📁',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: 'Failed to export data. Please try again.',
+      });
+    }
   };
 
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,13 +252,57 @@ function App() {
         try {
           const importedEntries = JSON.parse(e.target?.result as string);
           setEntries(importedEntries);
+          addToast({
+            type: 'success',
+            message: `${importedEntries.length} entries imported successfully! 📥`,
+          });
         } catch (error) {
-          alert('Invalid file format. Please select a valid JSON file.');
+          addToast({
+            type: 'error',
+            message: 'Invalid file format. Please select a valid JSON file.',
+          });
         }
       };
       reader.readAsText(file);
     }
   };
+
+  const shareEntry = async (entry: JournalEntry) => {
+    try {
+      const shareText = `One Good Thing - ${format(new Date(entry.date), 'MMMM d, yyyy')}\n\n${entry.content}\n\n#Gratitude #OneGoodThing`;
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: 'One Good Thing',
+          text: shareText,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        addToast({
+          type: 'success',
+          message: 'Entry copied to clipboard! 📋',
+        });
+      }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: 'Failed to share entry. Please try again.',
+      });
+    }
+  };
+
+  const filteredEntries = entries.filter(entry => {
+    const matchesSearch = searchTerm === '' || 
+      entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesTags = selectedTags.length === 0 || 
+      entry.tags?.some(tag => selectedTags.includes(tag));
+    
+    return matchesSearch && matchesTags;
+  });
+
+  const allTags = Array.from(new Set(entries.flatMap(entry => entry.tags || [])));
 
   const renderCalendar = () => {
     const days = getCalendarDays();
@@ -144,6 +315,7 @@ function App() {
           <button 
             onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}
             className="calendar-nav-btn"
+            aria-label="Previous month"
           >
             ‹
           </button>
@@ -153,6 +325,7 @@ function App() {
           <button 
             onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}
             className="calendar-nav-btn"
+            aria-label="Next month"
           >
             ›
           </button>
@@ -177,6 +350,15 @@ function App() {
                 key={day.toISOString()}
                 className={`calendar-day ${isSelected ? 'selected' : ''} ${isCurrentDay ? 'today' : ''} ${entry ? 'has-entry' : ''}`}
                 onClick={() => setSelectedDate(day)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedDate(day);
+                  }
+                }}
+                aria-label={`${format(day, 'MMMM d, yyyy')}${entry ? ' - Has entry' : ' - No entry'}`}
               >
                 <span className="day-number">{format(day, 'd')}</span>
                 {entry && <div className="entry-indicator">❤️</div>}
@@ -232,6 +414,14 @@ function App() {
             <div className="navbar-actions">
               <button 
                 className="nav-btn"
+                onClick={() => setShowSearch(!showSearch)}
+                title="Search entries (Ctrl+/)"
+              >
+                <Search className="nav-icon" />
+              </button>
+              
+              <button 
+                className="nav-btn"
                 onClick={() => setDarkMode(!darkMode)}
                 title="Toggle Dark Mode"
               >
@@ -241,7 +431,7 @@ function App() {
               <button 
                 className="nav-btn"
                 onClick={() => setShowEntryModal(true)}
-                title="Add New Entry"
+                title="Add New Entry (Ctrl+N)"
               >
                 <Plus className="nav-icon" />
               </button>
@@ -284,6 +474,51 @@ function App() {
         </div>
       </nav>
 
+      {/* Search Bar */}
+      {showSearch && (
+        <div className="search-container">
+          <div className="search-bar">
+            <Search className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search entries or tags..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+              autoFocus
+            />
+            <button 
+              onClick={() => setShowSearch(false)}
+              className="search-close-btn"
+            >
+              <X className="search-close-icon" />
+            </button>
+          </div>
+          
+          {allTags.length > 0 && (
+            <div className="tag-filter">
+              <Filter className="filter-icon" />
+              <span className="filter-label">Filter by tags:</span>
+              <div className="tag-buttons">
+                {allTags.map(tag => (
+                  <button
+                    key={tag}
+                    className={`tag-btn ${selectedTags.includes(tag) ? 'active' : ''}`}
+                    onClick={() => setSelectedTags(prev => 
+                      prev.includes(tag) 
+                        ? prev.filter(t => t !== tag)
+                        : [...prev, tag]
+                    )}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="container">
         <main className="main-content">
           <div className="content-grid">
@@ -313,16 +548,31 @@ function App() {
                 <div className="entry-display">
                   <div className="entry-content">
                     <p>{selectedEntry.content}</p>
+                    {selectedEntry.tags && selectedEntry.tags.length > 0 && (
+                      <div className="entry-tags">
+                        {selectedEntry.tags.map(tag => (
+                          <span key={tag} className="entry-tag">#{tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="entry-actions">
                     <button 
                       onClick={() => {
                         setEntryText(selectedEntry.content);
+                        setEditingEntry(selectedEntry);
                         setShowEntryModal(true);
                       }}
                       className="edit-btn"
                     >
                       Edit
+                    </button>
+                    <button 
+                      onClick={() => shareEntry(selectedEntry)}
+                      className="share-btn"
+                    >
+                      <Share2 className="share-icon" />
+                      Share
                     </button>
                     <button 
                       onClick={() => deleteEntry(selectedEntry.id)}
@@ -347,7 +597,9 @@ function App() {
           <div className="modal-overlay" onClick={() => setShowEntryModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h3>One Good Thing - {format(selectedDate, 'MMMM d, yyyy')}</h3>
+                <h3>
+                  {editingEntry ? 'Edit Entry' : 'New Entry'} - {format(selectedDate, 'MMMM d, yyyy')}
+                </h3>
                 <button 
                   onClick={() => setShowEntryModal(false)}
                   className="close-btn"
@@ -356,33 +608,83 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                <textarea
-                  value={entryText}
-                  onChange={(e) => setEntryText(e.target.value)}
-                  placeholder="What's one good thing that happened today? 🌟"
-                  className="entry-textarea"
-                  rows={4}
-                  autoFocus
-                />
+                <div className="entry-input-container">
+                  <textarea
+                    value={entryText}
+                    onChange={(e) => setEntryText(e.target.value)}
+                    placeholder="What's one good thing that happened today? 🌟
+
+Tip: Use #tags to categorize your entries (e.g., #family #work #nature)"
+                    className="entry-textarea"
+                    rows={6}
+                    autoFocus
+                    disabled={isLoading}
+                  />
+                  <div className="entry-input-footer">
+                    <div className="input-tips">
+                      <span className="tip">💡 Use #tags to organize entries</span>
+                      <span className="tip">⌨️ Ctrl+N to add new entry</span>
+                    </div>
+                    <div className="character-count">
+                      {entryText.length}/1000
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button 
                   onClick={() => setShowEntryModal(false)}
                   className="cancel-btn"
+                  disabled={isLoading}
                 >
                   Cancel
                 </button>
                 <button 
-                  onClick={addEntry}
+                  onClick={editingEntry ? updateEntry : addEntry}
                   className="save-btn"
-                  disabled={!entryText.trim()}
+                  disabled={!entryText.trim() || isLoading}
                 >
-                  Save Entry
+                  {isLoading ? (
+                    <div className="loading-spinner"></div>
+                  ) : (
+                    <>
+                      {editingEntry ? 'Update Entry' : 'Save Entry'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         )}
+      </div>
+
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id} 
+            className={`toast toast-${toast.type}`}
+            onClick={() => removeToast(toast.id)}
+          >
+            <div className="toast-icon">
+              {toast.type === 'success' && <CheckCircle className="toast-icon-svg" />}
+              {toast.type === 'error' && <AlertCircle className="toast-icon-svg" />}
+              {toast.type === 'info' && <Info className="toast-icon-svg" />}
+            </div>
+            <div className="toast-content">
+              <span className="toast-message">{toast.message}</span>
+            </div>
+            <button 
+              className="toast-close"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeToast(toast.id);
+              }}
+            >
+              <X className="toast-close-icon" />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
