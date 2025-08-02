@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
-import { Plus, Heart, Calendar, Sun, Settings, BarChart3, Download, Upload, Moon, Bell, CheckCircle, AlertCircle, X, Search, Filter, Tag, Image, Share2, Info } from 'lucide-react';
+import { Plus, Heart, Calendar, Sun, Settings, BarChart3, Download, Upload, Moon, Bell, CheckCircle, AlertCircle, X, Search, Filter, Share2, Info, Grid3X3 } from 'lucide-react';
 import './App.css';
+import { GratitudeBento } from './components/GratitudeBento';
 
 interface JournalEntry {
   id: string;
@@ -34,6 +35,7 @@ function App() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [viewMode, setViewMode] = useState<'calendar' | 'bento'>('calendar');
 
   // Load entries from localStorage on component mount
   useEffect(() => {
@@ -86,6 +88,10 @@ function App() {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, []);
 
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
+
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = Date.now().toString();
     const newToast = { ...toast, id, duration: toast.duration || 3000 };
@@ -94,11 +100,7 @@ function App() {
     setTimeout(() => {
       removeToast(id);
     }, newToast.duration);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  }, []);
+  }, [removeToast]);
 
   const getEntryForDate = (date: Date) => {
     return entries.find(entry => isSameDay(new Date(entry.date), date));
@@ -291,16 +293,7 @@ function App() {
     }
   };
 
-  const filteredEntries = entries.filter(entry => {
-    const matchesSearch = searchTerm === '' || 
-      entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesTags = selectedTags.length === 0 || 
-      entry.tags?.some(tag => selectedTags.includes(tag));
-    
-    return matchesSearch && matchesTags;
-  });
+
 
   const allTags = Array.from(new Set(entries.flatMap(entry => entry.tags || [])));
 
@@ -430,6 +423,14 @@ function App() {
               
               <button 
                 className="nav-btn"
+                onClick={() => setViewMode(viewMode === 'calendar' ? 'bento' : 'calendar')}
+                title={`Switch to ${viewMode === 'calendar' ? 'Bento' : 'Calendar'} View`}
+              >
+                <Grid3X3 className="nav-icon" />
+              </button>
+              
+              <button 
+                className="nav-btn"
                 onClick={() => setShowEntryModal(true)}
                 title="Add New Entry (Ctrl+N)"
               >
@@ -521,75 +522,88 @@ function App() {
 
       <div className="container">
         <main className="main-content">
-          <div className="content-grid">
-            <div className="calendar-section">
-              <div className="section-header">
-                <Calendar className="section-icon" />
-                <h2>Calendar View</h2>
+          {viewMode === 'calendar' ? (
+            <div className="content-grid">
+              <div className="calendar-section">
+                <div className="section-header">
+                  <Calendar className="section-icon" />
+                  <h2>Calendar View</h2>
+                </div>
+                {renderCalendar()}
               </div>
-              {renderCalendar()}
-            </div>
 
-            <div className="entry-section">
-              <div className="section-header">
-                <h2>Entry for {format(selectedDate, 'MMMM d, yyyy')}</h2>
-                {!selectedEntry && (
-                  <button 
-                    onClick={() => setShowEntryModal(true)}
-                    className="add-entry-btn"
-                  >
-                    <Plus className="btn-icon" />
-                    Add Entry
-                  </button>
+              <div className="entry-section">
+                <div className="section-header">
+                  <h2>Entry for {format(selectedDate, 'MMMM d, yyyy')}</h2>
+                  {!selectedEntry && (
+                    <button 
+                      onClick={() => setShowEntryModal(true)}
+                      className="add-entry-btn"
+                    >
+                      <Plus className="btn-icon" />
+                      Add Entry
+                    </button>
+                  )}
+                </div>
+
+                {selectedEntry ? (
+                  <div className="entry-display">
+                    <div className="entry-content">
+                      <p>{selectedEntry.content}</p>
+                      {selectedEntry.tags && selectedEntry.tags.length > 0 && (
+                        <div className="entry-tags">
+                          {selectedEntry.tags.map(tag => (
+                            <span key={tag} className="entry-tag">#{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="entry-actions">
+                      <button 
+                        onClick={() => {
+                          setEntryText(selectedEntry.content);
+                          setEditingEntry(selectedEntry);
+                          setShowEntryModal(true);
+                        }}
+                        className="edit-btn"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => shareEntry(selectedEntry)}
+                        className="share-btn"
+                      >
+                        <Share2 className="share-icon" />
+                        Share
+                      </button>
+                      <button 
+                        onClick={() => deleteEntry(selectedEntry.id)}
+                        className="delete-btn"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="empty-entry">
+                    <p>✨ No entry for this day yet</p>
+                    <p>Take a moment to reflect on something positive that happened today</p>
+                  </div>
                 )}
               </div>
-
-              {selectedEntry ? (
-                <div className="entry-display">
-                  <div className="entry-content">
-                    <p>{selectedEntry.content}</p>
-                    {selectedEntry.tags && selectedEntry.tags.length > 0 && (
-                      <div className="entry-tags">
-                        {selectedEntry.tags.map(tag => (
-                          <span key={tag} className="entry-tag">#{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="entry-actions">
-                    <button 
-                      onClick={() => {
-                        setEntryText(selectedEntry.content);
-                        setEditingEntry(selectedEntry);
-                        setShowEntryModal(true);
-                      }}
-                      className="edit-btn"
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => shareEntry(selectedEntry)}
-                      className="share-btn"
-                    >
-                      <Share2 className="share-icon" />
-                      Share
-                    </button>
-                    <button 
-                      onClick={() => deleteEntry(selectedEntry.id)}
-                      className="delete-btn"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-entry">
-                  <p>✨ No entry for this day yet</p>
-                  <p>Take a moment to reflect on something positive that happened today</p>
-                </div>
-              )}
             </div>
-          </div>
+          ) : (
+            <div className="p-8">
+              <GratitudeBento
+                totalEntries={getTotalEntries()}
+                currentStreak={getStreakCount()}
+                thisMonthEntries={getCurrentMonthEntries()}
+                onAddEntry={() => setShowEntryModal(true)}
+                onToggleDarkMode={() => setDarkMode(!darkMode)}
+                isDarkMode={darkMode}
+              />
+            </div>
+          )}
         </main>
 
         {/* Entry Modal */}
